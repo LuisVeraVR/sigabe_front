@@ -1,23 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  Typography, 
-  TextField, 
-  Button, 
-  Grid, 
-  Paper, 
-  Box, 
-  FormControl, 
-  FormControlLabel, 
-  InputLabel, 
-  Select, 
+import React, { useState, useEffect, useCallback } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import Grid from "@mui/material/Grid";
+import {
+  Typography,
+  TextField,
+  Button,
+  Paper,
+  Box,
+  FormControl,
+  FormControlLabel,
+  InputLabel,
+  Select,
   MenuItem,
   Switch,
   Alert,
-  CircularProgress
-} from '@mui/material';
-import { Book, BookCreate, BookUpdate } from '../models/Book';
-import { BookService } from '../services/api';
+  CircularProgress,
+} from "@mui/material";
+import { SelectChangeEvent } from "@mui/material/Select";
+import { BookCreate, BookUpdate } from "../models/Book";
+import { BookService } from "../services/api";
 
 type BookFormData = {
   title: string;
@@ -30,13 +31,13 @@ type BookFormData = {
 };
 
 const initialFormData: BookFormData = {
-  title: '',
-  author: '',
-  year: '',
-  publisher: '',
-  type: '',
-  photo: '',
-  avaliable: true
+  title: "",
+  author: "",
+  year: "",
+  publisher: "",
+  type: "",
+  photo: "",
+  avaliable: true,
 };
 
 const BookForm: React.FC = () => {
@@ -45,22 +46,16 @@ const BookForm: React.FC = () => {
   const isEditMode = Boolean(id);
 
   const [formData, setFormData] = useState<BookFormData>(initialFormData);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState<boolean>(false);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (isEditMode) {
-      fetchBook();
-    }
-  }, [id]);
-
-  const fetchBook = async () => {
+  const fetchBook = useCallback(async () => {
+    if (!isEditMode) return;
     try {
       setLoading(true);
       const books = await BookService.getBooks();
-      const book = books.find(b => b.id === Number(id));
-      
+      const book = books.find((b) => b.id === Number(id));
       if (book) {
         setFormData({
           title: book.title,
@@ -68,93 +63,98 @@ const BookForm: React.FC = () => {
           year: book.year.toString(),
           publisher: book.publisher,
           type: book.type,
-          photo: book.photo || '',
-          avaliable: book.avaliable
+          photo: book.photo || "",
+          avaliable: book.avaliable,
         });
       } else {
         setError(`No se encontró el libro con ID ${id}`);
       }
     } catch (err) {
-      console.error('Error al cargar el libro:', err);
-      setError('No se pudo cargar la información del libro.');
+      console.error(err);
+      setError("No se pudo cargar la información del libro.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, isEditMode]);
 
-  const handleChange = (event: React.ChangeEvent<HTMLInputElement | { name?: string; value: unknown }>) => {
+  useEffect(() => {
+    fetchBook();
+  }, [fetchBook]);
+
+  // ─── Handlers ────────────────────────────────────────────────────────────────
+  const handleChange = (
+    event: React.ChangeEvent<
+      HTMLInputElement | { name?: string; value: unknown }
+    >
+  ) => {
     const name = event.target.name as keyof BookFormData;
     const value = event.target.value;
-    
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSelectChange = (event: SelectChangeEvent) => {
+    const name = event.target.name as keyof BookFormData;
+    const value = event.target.value;
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSwitchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({
-      ...prev,
-      avaliable: event.target.checked
-    }));
+    setFormData((prev) => ({ ...prev, avaliable: event.target.checked }));
   };
 
   const validateForm = (): boolean => {
-    // Validación básica
-    if (!formData.title || !formData.author || !formData.year || !formData.publisher || !formData.type) {
-      setError('Por favor completa todos los campos obligatorios.');
+    if (
+      !formData.title ||
+      !formData.author ||
+      !formData.year ||
+      !formData.publisher ||
+      !formData.type
+    ) {
+      setError("Por favor completa todos los campos obligatorios.");
       return false;
     }
-
-    // Validar que el año sea un número
     if (isNaN(Number(formData.year))) {
-      setError('El año debe ser un número.');
+      setError("El año debe ser un número.");
       return false;
     }
-
     setError(null);
     return true;
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
 
     try {
       setSaving(true);
-      
-      const bookData = {
+      const data = {
         title: formData.title,
         author: formData.author,
         year: Number(formData.year),
         publisher: formData.publisher,
         type: formData.type,
         photo: formData.photo || undefined,
-        avaliable: formData.avaliable
+        avaliable: formData.avaliable,
       };
-      
+
       if (isEditMode) {
-        await BookService.updateBook(Number(id), bookData as BookUpdate);
+        await BookService.updateBook(Number(id), data as BookUpdate);
       } else {
-        await BookService.createBook(bookData as BookCreate);
+        await BookService.createBook(data as BookCreate);
       }
-      
-      // Navegar de regreso a la lista después de guardar
-      navigate('/');
+      navigate("/");
     } catch (err) {
-      console.error('Error al guardar el libro:', err);
-      setError('No se pudo guardar el libro. Por favor intenta de nuevo más tarde.');
+      console.error(err);
+      setError("No se pudo guardar el libro. Intenta de nuevo más tarde.");
     } finally {
       setSaving(false);
     }
   };
 
+  // ─── UI ──────────────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+      <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
         <CircularProgress />
       </Box>
     );
@@ -162,8 +162,8 @@ const BookForm: React.FC = () => {
 
   return (
     <Paper sx={{ p: 4, mt: 3 }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        {isEditMode ? 'Editar Libro' : 'Añadir Nuevo Libro'}
+      <Typography variant="h4" gutterBottom>
+        {isEditMode ? "Editar Libro" : "Añadir Nuevo Libro"}
       </Typography>
 
       {error && (
@@ -174,7 +174,7 @@ const BookForm: React.FC = () => {
 
       <Box component="form" onSubmit={handleSubmit} sx={{ mt: 3 }}>
         <Grid container spacing={3}>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               required
               fullWidth
@@ -184,8 +184,8 @@ const BookForm: React.FC = () => {
               onChange={handleChange}
             />
           </Grid>
-          
-          <Grid item xs={12} sm={6}>
+
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               required
               fullWidth
@@ -195,8 +195,8 @@ const BookForm: React.FC = () => {
               onChange={handleChange}
             />
           </Grid>
-          
-          <Grid item xs={12} sm={6}>
+
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               required
               fullWidth
@@ -207,8 +207,8 @@ const BookForm: React.FC = () => {
               onChange={handleChange}
             />
           </Grid>
-          
-          <Grid item xs={12} sm={6}>
+
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               required
               fullWidth
@@ -218,15 +218,15 @@ const BookForm: React.FC = () => {
               onChange={handleChange}
             />
           </Grid>
-          
-          <Grid item xs={12} sm={6}>
+
+          <Grid size={{ xs: 12, sm: 6 }}>
             <FormControl fullWidth required>
               <InputLabel>Tipo</InputLabel>
               <Select
                 name="type"
                 value={formData.type}
                 label="Tipo"
-                onChange={handleChange}
+                onChange={handleSelectChange}
               >
                 <MenuItem value="Ficción">Ficción</MenuItem>
                 <MenuItem value="No Ficción">No Ficción</MenuItem>
@@ -237,8 +237,8 @@ const BookForm: React.FC = () => {
               </Select>
             </FormControl>
           </Grid>
-          
-          <Grid item xs={12} sm={6}>
+
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               fullWidth
               label="URL de Imagen"
@@ -248,8 +248,8 @@ const BookForm: React.FC = () => {
               placeholder="https://ejemplo.com/imagen.jpg"
             />
           </Grid>
-          
-          <Grid item xs={12}>
+
+          <Grid size={{ xs: 12 }}>
             <FormControlLabel
               control={
                 <Switch
@@ -264,27 +264,18 @@ const BookForm: React.FC = () => {
           </Grid>
         </Grid>
 
-        <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
-          <Button
-            variant="contained"
-            color="primary"
-            type="submit"
-            disabled={saving}
-          >
+        <Box sx={{ mt: 3, display: "flex", gap: 2 }}>
+          <Button variant="contained" type="submit" disabled={saving}>
             {saving ? (
               <>
                 <CircularProgress size={24} sx={{ mr: 1 }} />
-                Guardando...
+                Guardando…
               </>
             ) : (
-              'Guardar'
+              "Guardar"
             )}
           </Button>
-          
-          <Button
-            variant="outlined"
-            onClick={() => navigate('/')}
-          >
+          <Button variant="outlined" onClick={() => navigate("/")}>
             Cancelar
           </Button>
         </Box>
